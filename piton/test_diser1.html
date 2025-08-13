@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"/>
+	<title>сайт js</title>
+</head>
+<body>
+
+
+<form method="post">
+<input type="text" id="namea" name="namea" list="pod" placeholder="автора сюда" oninput="f_input()">
+<datalist id="pod" class="datalist">
+  <option data-keya="3">kkkkkkkkkkkkk</option>
+  <option data-keya="32">ddddddd123ddddddddddd</option>
+  <option data-keya="33">ssssssssssssssssssss</option>
+</datalist>
+<input type="text" id="keya" name="keya" placeholder="ключ. потом type=hidden" value="">
+<input type="submit" value="послать">
+</form>
+
+<script>
+let timerID; //глобальная переменная для хранения идентификатора таймаута
+let el_vvedeno = document.getElementById('namea');
+  
+function day_autors_iz_bd() {
+  console.log('вызывали функцию запроса к БД');
+  
+fetch("https://biblio1.ru/api/get_autors_like.php?like="+el_vvedeno.value)
+  .then(
+    function (otvet) {
+      console.log("первый then, status=", otvet.status); //для отладки
+      return otvet.json();
+    },
+    function (err) {
+      //функция для обработки ошибки, напимер, перепутали имя файла
+      console.log("первый ERROR, status=", err.status, " err=", err); //для отладки
+      return err;
+    }
+  )
+  .then(function (autors) {
+    console.log("второй then, status=", autors.status);
+    console.log(autors);
+    let el_datalist = document.getElementById('pod'); //получили наш элемент со списком значений
+    while (el_datalist.firstChild) { //очищаем все значения
+            el_datalist.removeChild(el_datalist.firstChild);
+        };
+    for (key_autor in autors) {
+      //https://learn.javascript.ru/object#the-for-in-loop цикл for для ОБЪЕКТОВ. Массив и объект - это раззные вещи
+      console.log(autors[key_autor].id, "=>>", autors[key_autor].name_autors);
+      let new_opt = document.createElement('option');
+      new_opt.value = autors[key_autor].name_autors; // Устанавливаем значение автора
+      new_opt.setAttribute('data-keya', autors[key_autor].id); // Устанавливаем атрибут data-keya
+
+    // Находим элемент datalist и добавляем в него новый option
+      
+      el_datalist.appendChild(new_opt);
+    };
+  });
+/* -- сокращенная форма, также нет обработок ошибок
+fetch("https://biblio1.ru/api/get_autors_like.php")
+  .then(otvet => otvet.json())
+  .then(json_otvet => console.log(json_otvet));
+*/
+};
+
+
+function f_input() {
+
+  //console.log(el_vvedeno);
+  let el_datalist = document.getElementById('pod');
+  //console.log(el_datalist);
+  let el_hidden = document.getElementById('keya');
+  let m_option = Array.from(el_datalist.options); //console.log(m_option); //js-массивы, метод from
+  let selected_item = m_option.find(o => o.value == el_vvedeno.value); //стрелочная функция. метод - find
+  //console.log('выбрано = ',selected_item);
+  el_hidden.value = selected_item ? selected_item.dataset.keya : 111; //сокращенная форма IF-THEN-ELSE. 111 нужно поменять на что-то такое, что будет означать отсутствие выбора из выпадающего списка. например, пусутую строку или значение ноль  или любой англ. текст.
+  console.log('до очистки timerID = ',timerID);
+  clearTimeout(timerID);console.log('после очистки timerID = ',timerID);
+  timerID = setTimeout(day_autors_iz_bd,3000); //https://learn.javascript.ru/settimeout-setinterval
+  console.log('после установки timerID = ',timerID);
+};
+</script>
+
+
+<a href='https://www.biblio1.ru/test_diser2.html'>ddddd</a>
+<a href='https://www.biblio1.ru/test_diser3.html'/a>
+</body>
+</html>
+
+

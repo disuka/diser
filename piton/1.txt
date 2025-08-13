@@ -1,0 +1,262 @@
+# pip install mysql-connector-python
+
+import threading
+import mysql.connector
+from mysql.connector import Error, errorcode
+import time # это для таймера
+from datetime import datetime
+
+
+class Bd_rabota():
+  def __init__(self, reg):
+    print(f"{datetime.now()}| cls_bd.INIT(idO={reg}): инициализация объекта БД_работа")
+    self.__host='localhost'         # например, 'localhost' или IP адрес сервера
+    self.__database='diser' # имя вашей базы данных
+    self.__user='forpiton'     # имя пользователя
+    self.__password='passwordpiton'   # пароль
+    self.__connection = False #само соединение с СУБД. предполагается держать открытым
+    self.__oregno = reg  #идентификатор для многопоточной работы
+    #print(errorcode.ER_DUP_ENTRY, 'ddddddd')
+
+  def conn(self): #коннект воркера к бд
+    print(f"{datetime.now()}| cls_bd.CONNECT(idO={self.__oregno}): метод коннекта к бд начало.")
+    try:
+            self.__connection = mysql.connector.connect(host=self.__host,
+                database=self.__database,
+                user=self.__user,
+                password=self.__password)
+            if self.__connection.is_connected():
+                print(f"  {datetime.now()}| cls_bd.CONNECT(idO={self.__oregno}): Успешно подключено к базе данных")
+    except Error as e:
+            print(f"  {datetime.now()}| cls_bd.CONNECT(idO={self.__oregno}): Ошибка в методе CONN при подключении к MySQL: {e}")
+
+  def disc(self): #дисконнект воркера к бд
+    print(f"{datetime.now()}| cls_bd.DISCONNECT(idO={self.__oregno}): метод дисконнекта от бд начало")
+    try:
+      if self.__connection.is_connected():
+          self.__connection.close()
+          print(f"  {datetime.now()}| cls_bd.DISCONNECT(idO={self.__oregno}): Соединение с MySQL было закрыто")
+      else:
+        print(f'  {datetime.now()}| cls_bd.DISCONNECT(idO={self.__oregno}):в методе дисконнект на найдено открытого подключения к субд')
+    except Error as e:
+      print(f"{datetime.now()}| cls_bd.DISCONNECT(idO={self.__oregno}) Ошибка в методе DISCONNECT при отключении от MySQL: {e}")
+
+  def day_rows(self, select_txt):
+    print(f'cls_bd.DAY_ROWS(idO={self.__oregno}): зашел в процедуру day_cursor')
+    try:
+      if self.__connection.is_connected():
+        print(f'  cls_bd.DAY_ROWS(idO={self.__oregno}): живой коннект обнаружен')
+        curs = self.__connection.cursor()
+        # Выполнение запроса SELECT
+        curs.execute(select_txt)
+        print(f'  cls_bd.DAY_ROWS(idO={self.__oregno}): select выполнил, возвращаю LIST ')
+        recs = curs.fetchall()  # Получение всех результатов запроса. обязательно выполнять, иначе is_connected() будет возвращать FALSE
+        curs.close() # закрыть сразу
+        return recs
+      else:
+        print(f'  cls_bd.DAY_ROWS(idO={self.__oregno}): живого коннекта не обнаружено, возвращать нечего')
+    except Error as e:
+        print(f"cls_bd.DAY_ROWS(idO={self.__oregno}): Ошибка в методе DAY_ROWS(): {e}")
+  
+  def ins_url(self, uurl, iskl, kod, status,lim_rcs, lim_hrf, lim_sz, sz):
+    print(f'{datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): метод INSERT записи в таблицу. урл={uurl}, status={status}')
+    error_kod = 0;
+    try:
+      if self.__connection.is_connected():
+        print(f'  {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): живой коннект обнаружен')
+        cursor_insert = self.__connection.cursor()
+        insert_txt = f'insert into t_url (url, url_id_iskl, kod_otveta, busy, status, limit_recurs, limit_href, limit_size, url_size) values ("{uurl}",{iskl},{kod},{self.__oregno}, {status}, {lim_rcs}, {lim_hrf}, {lim_sz}, {sz})'
+        #__subd.ins_url(url, kod_otveta, self.__krregno, status, self.__setup_lim_recurs,self.__setup_lim_href,self.__setup_lim_size)
+        print(f'  {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): после сборки insert={insert_txt}')
+        try:
+          cursor_insert.execute(insert_txt)
+          self.__connection.commit()
+        except Error as e:
+          print(f"    {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): Ошибка в методе INS_URL(). insert сломался: {e}, код ошибки: {e.errno}")  
+          error_kod = e.errno
+      else:
+        print(f'  {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): живого коннекта не обнаружено, на всякий случай остановлюсь')  
+        return 'stop'
+        
+    except Error as e:
+        print(f"  {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): Ошибка в методе INS_URL(): {e}, код ошибки: {e.errno}")
+        error_kod = e.errno
+    finally:
+      if cursor_insert:
+          cursor_insert.close()
+          print(f"  {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): Mетод INS_URL(), успешно закрыт курсор")
+      else:
+          print(f"  {datetime.now()}| cls_bd.INSERT(idO={self.__oregno}): Ошибка в методе INS_URL()? при закрытии курсора")
+      print( f'{datetime.now()}| сейчас буду выходить из ins_url c кодом выхода {error_kod}')    
+      return error_kod
+
+  def test_conn(self):
+    print(f'cls_bd.TEST_CONN(idO={self.__oregno}): зашел в процедуру test_conn')
+    try:
+      if self.__connection.is_connected():
+        print(f'  cls_bd.TEST_CONN(idO={self.__oregno}): живой коннект обнаружен')
+      else:
+        print(f'  cls_bd.TEST_CONN(idO={self.__oregno}): живого коннекта не обнаружено, возвращать нечего')
+    except Error as e:
+        print(f"cls_bd.TEST_CONN(idO={self.__oregno}): Ошибка в методе TEST_CONN: {e}")    
+      
+      
+  def inf(self): # инфо
+    print(f'cls_bd.INF(idO={self.__oregno}): информация о переменных. Хост=', self.__host,  ' дб=',self.__database, ' юзер=',self.__user, ' пароль=',self.__password, ' regno=',self.__oregno, ' connection=',self.__connection)
+    if self.__connection.is_connected():
+      print(f'  cls_bd.INF(idO={self.__oregno}): connect обнаружен')
+    else:
+      print(f'  cls_bd.INF(idO={self.__oregno}): connect НЕ обнаружен')
+# ^^^^^^^^^^^^^^^^ конец класса Bd_rabota ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+------------------------------  WORKER  ---------------
+import random
+def worker():
+  #sl = 60
+  print("WORKER(): зашли в воркер")
+  regno = random.randrange(0, 9999)
+  print(f'WORKER(): присвоили ID={regno}')
+  kr = Krauler(regno, 'http://bdo.horse/spawn-map/')
+  kr.start1()
+  print(f"WORKER({regno}): закончили воркер")
+
+worker()
+#^^^^^^^^^^^^^^^^^^^^^^ конец описания WORKER ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# Создание потоков
+thread1 = threading.Thread(target=worker, args=())
+#thread2 = threading.Thread(target=worker, args=())
+# Запуск потоков
+thread1.start()
+#thread2.start()
+
+thread1.join()
+#thread2.join()
+
+
+------------------------------- Класс Краулер -=-----------------------------------------------
+import requests
+from requests.exceptions import HTTPError
+import random
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlsplit, urlunsplit
+
+
+class Krauler:
+  def __init__(self, krregno, start_url):
+    print(f"cls_kr.INIT(idO={krregno}): инициализация объекта Krauler")
+    self.__start_url = start_url  # откуда начинаем
+    self.__max_count = 333   # максимальное количество скачиваний урлов. сквозная относительно вложенности и количества урлов на странице
+    self.__now_count = 0   # текущее количество скачиваний урлов. сквозная относительно вложенности и количества урлов на странице
+    #self.__visited = set()          # посещенные страницы
+    self.__krregno = krregno
+    self.__subd = Bd_rabota(krregno) #один объект Bd_rabota на один объект краулера. типа это пользователь. не нужно беспокоиться о конкурентном доступе при многопоточной работе краулеров. СУБД сама разрулит одновременный доступ от разных краулеров
+    self.__setup_lim_recurs = 10 #глубина вложенности. на сколько в рекурсию можем провалиться одним воркером
+    self.__now_recurs = 0 #глубина вложенности. на текущий момент
+    self.__setup_lim_href = 40 #максимальное количество ссылок на странице. сверх этого не обрабатываем
+    self.__setup_lim_size = 1048576 #максимальный размер ответа в байтах, который обрабатываем
+    self.__urldubley = 0 #здесь можно считать дубли, которые будут пытаться записываться в базу. для дальнейшего анализа
+  def start1(self):
+    print(f"cls_kr.START1(idO={self.__krregno}): metod=start1 начало")
+    self.__subd.conn()
+    print(f'  cls_kr.START1(idO={self.__krregno}): выполнили CONNECT, стартовать буду с {self.__start_url}')
+    kod_dl = self.__download_link(self.__start_url, 1)
+    print(f'  cls_kr.START1(idO={self.__krregno}): закончил обход с кодом {kod_dl}')
+    self.__subd.disc()
+    print(f'дублей всего было: {self.__urldubley}')
+
+  def __download_link(self, url, status=0):
+    print(f"{datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): --------------------------начало, url={url}, status={status}")
+    if self.__now_count >= self.__max_count:
+      print (f'    {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): достигли лимит по общему количеству страниц выходим.')
+      return 'хватит по общему количеству'
+    if self.__now_recurs >= self.__setup_lim_recurs:
+      print (f'    {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): достигли лимит по кол-ву рекурсий выходим.')
+      return 'хватит по уровню рекурсии'
+    isklu4enie = None #моя личная классификация исключений. один код может включать несколько реальных кодов ошибок. так что это группировочные некие коды
+    errtxt = '' #для записи в БД текст ошибки. он будет появляться только если сработал эксепшн.
+
+    def get_redirect_url(rr): #это для возвращения урла, на который идет редирект
+      if rr.status_code in [301, 302, 303, 307, 308]:
+        return rr.headers.get('location') #регистронезависимое извлечение
+      return ''
+    #if len(self.__visited) >= self.__max_pages or url in self.__visited:
+       #return
+    #print(f"  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): буду вызывать ins_url для: {url}. статус={status}")
+    #self.__visited.add(url)
+    self.__now_count += 1
+    
+    try:
+      response = requests.get(url,timeout=(3, 10), allow_redirects=False)  # 3 сек. на подключение, 10 сек. на чтение, запрет редиректов, иначе не разобраться
+      isklu4enie = 0   #если эксепшенов не было, то поставим в ноль. будет означать, что какойто код у нас имеется
+      response.raise_for_status() # Метод raise_for_status() выбросит исключение HTTPError, если статус ответа указывает на ошибку (4xx или 5xx):
+      #print('а чо тут штоле')
+      kod_otveta=response.status_code
+      print(f"  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): get(url) выполнен для: {url}. код ответа={kod_otveta}, всего посетили страниц: {self.__now_count}")
+      kod_insert = self.__subd.ins_url(url, get_redirect_url(response), isklu4enie, kod_otveta, status, self.__setup_lim_recurs,self.__setup_lim_href,self.__setup_lim_size, len(response.content),errtxt,self.__now_recurs) #запись в бд
+      print(f'  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): пришел код из insert ={kod_insert}')
+      if kod_insert == errorcode.ER_DUP_ENTRY:
+        print (f'    {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): обнаружена попытка задублировать строку. похоже, что ее мы уже обрабатывали раньше. выходим.')
+        self.__urldubley += 1
+        return 'дубль'
+      if kod_otveta == 200:
+        print (f'  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): обрабатываю ответ 200, буду посылать в парсер ')
+        soup = BeautifulSoup(response.text, 'html.parser')
+        self.__parse_links(soup, url)
+      else:
+        print(f"  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): Парсить не будем, т.к. не получил код 200: {url} (Status code: {kod_otveta})")
+    except requests.exceptions.ConnectTimeout as e:
+      isklu4enie = 1
+      errtxt = e
+    except requests.exceptions.ReadTimeout as e:
+      isklu4enie = 2
+      errtxt = e
+    except requests.exceptions.Timeout as e:
+      isklu4enie = 3
+      errtxt = e
+    except requests.exceptions.ConnectionError as e:
+      isklu4enie = 1000
+      errtxt = e
+    except HTTPError as e:
+      isklu4enie = 404
+      errtxt = e
+    except requests.RequestException as e: #если скачать страничку не получилось. ошибка вобще непонятная при получении request
+      isklu4enie = 999
+      errtxt = e
+      print(f"  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): ошибка 999 при попытке сделать GET непонятная: {e}")
+    except Exception as e: #если ошибка вобще-вобще непонятная
+      isklu4enie = 9999
+      errtxt = e
+      print(f"  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): ошибка 9999 вобще-вобще непонятная: {e}")
+    
+    if isklu4enie == None: # вобще такого никогда не должно быть
+      print(f'  {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): вобще хрень какая-то, не должно такого быть. на выходе.')
+      return 'error_HZ'
+    elif isklu4enie == 0:
+      return 'ok'  # если ноль, то значит мы сделали гет и он прошел норм и мы уже адрес записали в бд и сходили по рекурсии парсить
+    else: #здесь формируем инсерт в том случае, если было какое-то исключение.
+      kod_insert = self.__subd.ins_url(url, '', isklu4enie, 'NULL', status, self.__setup_lim_recurs,self.__setup_lim_href,self.__setup_lim_size, 0, errtxt,self.__now_recurs) #запись в бд
+    #except Exception: #если скачать страничку не получилось вобще непонятно почему
+      #print(f"  cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): ошибка вобще ХЗ --{Exception.error}")
+      #print(f"    cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): переданный урл:{url}")
+        # Delay to avoid overwhelming the server
+    time.sleep(1)
+
+  def __parse_links(self, soup, base_url):
+    print(f'{datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno}): зашел')
+    self.__now_recurs += 1
+    for link in soup.find_all('a', href=True):
+      absolute_url = urljoin(base_url, link['href']) #здесь могут быть еще параметры всякие в урле, нужно их выкусить
+      p_url = urlsplit(absolute_url)
+      absolute_url = urlunsplit((p_url.scheme, p_url.netloc, p_url.path, '', '')) #вот тут все выкусили из урла, все параметры и их значения. может и потом нужно их обрабатывать будет
+      #if absolute_url not in self.__visited:
+        #self.__download_link(absolute_url) # уходим в рекурсию
+      #print('абсолютный urllllllll:',absolute_url,', base_url=',base_url, '. сам href=', link['href'])
+      print (f"  {datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno})| base_url={base_url}: нашел такой:{absolute_url}, link={link['href']}")
+      kod_rec = self.__download_link(absolute_url) # уходим в рекурсию
+    print (f"  {datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno})| base_url={base_url}: вышел из рекурсии:{absolute_url} с кодом выхода {kod_rec}, сейчас буду брать след. адрес")
+    self.__now_recurs -= 1
+--------------------------------------------
+
+
+
