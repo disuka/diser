@@ -123,7 +123,7 @@ def worker():
 worker()
 #^^^^^^^^^^^^^^^^^^^^^^ конец описания WORKER ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-# Создание потоков
+# Создание потоков d
 thread1 = threading.Thread(target=worker, args=())
 #thread2 = threading.Thread(target=worker, args=())
 # Запуск потоков
