@@ -9,19 +9,6 @@ import time
 from mysql.connector import Error, errorcode
 
 class Krauler():
-# коды для логирования -------------------------------------------
-# 1   Krauler.init - стартует краулер, начало и конец метода START
-# 1   Krauler.start1 - стартует краулер, начало и конец метода START
-# 1   Krauler.start1 - стартует краулер, начало и конец метода START
-# 5   Krauler.__download_link - буду загружать урл
-# 30  Krauler.__download_link - достигнут лимит по рекурсии
-# 60  Krauler.__parse_links - обнаружена fake-страница по превышению ссылок на ней
-  
-#
-#
-#
-# коды для логирования ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  
   def __init__(self, start_url, psubd):
     self.__subd = psubd #один объект Bd_rabota на один объект краулера. типа это пользователь. не нужно беспокоиться о конкурентном доступе при многопоточной работе краулеров. СУБД сама разрулит одновременный доступ от разных краулеров. пул коннектов решил не делать,т.к. поток всегда чтото пишет.вроде логично держать один коннект на один поток/воркер
     self.__krregno = self.__subd.day_svoy_nomer()
@@ -39,12 +26,8 @@ class Krauler():
     self.__setup_lim_recurs = 10 #глубина вложенности. на сколько в рекурсию можем провалиться одним воркером
     self.__now_recurs = 0 #глубина вложенности. на текущий момент
     self.__setup_lim_href = 40 #максимальное количество ссылок на странице. сверх этого не обрабатываем
-    self.__count_lim_href = 0 #максимальное количество ссылок на странице. сверх этого не обрабатываем
-
-    self.__setup_fake_lim_href = 200 #если на странице насобирали столько ссылок, буду считать ее фейком и обрабатывать не буду. защита от накрутки алгоритма цитирования
-
     self.__setup_lim_size = 1048576 #максимальный размер ответа в байтах, который обрабатываем
-    self.__urldubley = 0 #здесь считаем дубли, которые будут пытаться записываться в базу. для дальнейшего анализа
+    self.__urldubley = 0 #здесь можно считать дубли, которые будут пытаться записываться в базу. для дальнейшего анализа
 
   def start1(self): # по-большому счету для красоты, чтобы понять, откуда стартуем
     self.__subd.add_log(self.__class__.__name__,'start1',1,f'Начало метода START1 в Krauler. стартую с урла:{self.__start_url}')
@@ -59,14 +42,10 @@ class Krauler():
     """
 
     if self.__now_recurs >= self.__setup_lim_recurs:
-      #print (f'    {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): достигли лимит по кол-ву рекурсий выходим.')
+      print (f'    {datetime.now()}| cls_kr.DOWNLOAD_LINK(idO={self.__krregno}): достигли лимит по кол-ву рекурсий выходим.')
       self.__subd.add_log(self.__class__.__name__,'__download_link',30,f'--- начало, url={url}, status={status}, лимит(рекурс)={self.__now_recurs}')
       return 'хватит по уровню рекурсии'
-    if self.__now_count >= self.__max_count:
-      self.__subd.add_log(self.__class__.__name__,'__download_link',50,f'Достигли предел настроек по общему количестсву: max={self.__max_count}, текущий счетчик: {self.__now_count}')
-      return 'достигнут общий лимит'
-
-    self.__subd.add_log(self.__class__.__name__,'__download_link',5,f'--- начало, url={url}, status={status}')
+    self.__subd.add_log(self.__class__.__name__,'__download_link',1,f'--- начало, url={url}, status={status}')
     isklu4enie = None #моя личная классификация исключений. один код может включать несколько реальных кодов ошибок. так что это группировочные некие коды
     errtxt = '' #для записи в БД текст ошибки. он будет появляться только если сработал эксепшн.
 
@@ -88,6 +67,9 @@ class Krauler():
         self.__urldubley += 1
         self.__subd.add_log(self.__class__.__name__,'__download_link',20,f'обнаружена попытка задублировать строку. похоже, что ее мы уже обрабатывали раньше. выходим.')
         return 'дубль'
+      elif self.__now_count >= self.__max_count:
+        self.__subd.add_log(self.__class__.__name__,'__download_link',30,f'Достигли предел настроек по общему количестсву: max={self.__max_count}, текущий счетчик: {self.__now_count}')
+        return 'достигнут общий лимит'
       if kod_otveta == 200:
         self.__subd.add_log(self.__class__.__name__,'__download_link',40,f'обрабатываю ответ 200, буду посылать в парсер')
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -133,9 +115,8 @@ class Krauler():
     time.sleep(1)
 
   def __parse_links(self, soup, base_url):
-    massiv_urls=[] #здесь будут все ссылки на странице, но не бьльше отведенного лимита
-    #print(f'{datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno}): а вот вам ')
-    self.__now_recurs = self.__now_recurs + 1
+    print(f'{datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno}): зашел')
+    self.__now_recurs += 1
     for link in soup.find_all('a', href=True):
       absolute_url = urljoin(base_url, link['href']) #здесь могут быть еще параметры всякие в урле, нужно их выкусить
       p_url = urlsplit(absolute_url)
@@ -143,19 +124,7 @@ class Krauler():
       #if absolute_url not in self.__visited:
         #self.__download_link(absolute_url) # уходим в рекурсию
       #print('абсолютный urllllllll:',absolute_url,', base_url=',base_url, '. сам href=', link['href'])
-      #print (f"  {datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno})| base_url={base_url}: нашел такой:{absolute_url}, link={link['href']} добавляю в массив")
-      massiv_urls.append(absolute_url)
-    unique_urls = list(set(massiv_urls))
-    len_unique_urls = len(unique_urls)
-    print(f"на выходе из массива урлов накопили: {len(massiv_urls)} ща буду их всех обрабатыватm, уникальных {len_unique_urls}")
-    if len_unique_urls > self.__setup_fake_lim_href:
-      self.__subd.add_log(self.__class__.__name__,'__parse_links',60,f'fake-страница: {url} (на ней урлов: {len_unique_urls})')
-    for i, ssylka in enumerate(unique_urls):
-      if i >= self.__setup_lim_href:
-        print("пизда по лимиту никогда такого не должно быть. выхожу следующей командой")
-        break
+      print (f"  {datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno})| base_url={base_url}: нашел такой:{absolute_url}, link={link['href']}")
       kod_rec = self.__download_link(absolute_url) # уходим в рекурсию
-    #print (f"  {datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno})| base_url={base_url}: вышел из рекурсии:{absolute_url} с кодом выхода {kod_rec}, сейчас буду брать след. адрес")
-    self.__now_recurs = self.__now_recurs - 1
-    if self.__now_recurs <0:
-      print('какая-то хрень, рекурсия меньше 0')
+    print (f"  {datetime.now()}| cls_kr.PARSE_LINKS(idO={self.__krregno})| base_url={base_url}: вышел из рекурсии:{absolute_url} с кодом выхода {kod_rec}, сейчас буду брать след. адрес")
+    self.__now_recurs -= 1
